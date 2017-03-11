@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import Queue
 import SokobanMechanics as m
+import Rank_Unrank as r
 import time
 
 
@@ -14,7 +15,7 @@ def bestFS(heuristic,start,goal):
         if m.is_goal(last_vertex,goal):
             return path
         for next_vertex in m.neighbors(last_vertex):
-            if any((next_vertex == x[1]) for x in path): #If new vertex already in path, ignore this neighbor.
+            if any((next_vertex == x[1]) for x in path):
                 continue
             new_path = path + [(heuristic(next_vertex,goal), next_vertex)]
             frontier.put(new_path)
@@ -29,7 +30,7 @@ def astar(heuristic,start,goal):
         if m.is_goal(last_vertex,goal):
             return path
         for next_vertex in m.neighbors(last_vertex):
-            if any((next_vertex == x) for x in path[1]): #If new vertex already in path, ignore this neighbor.
+            if any((next_vertex == x) for x in path[1]):
                 continue
             if m.is_stuck(next_vertex,goal):
                 continue
@@ -37,25 +38,43 @@ def astar(heuristic,start,goal):
             frontier.put(new_path)
     return None
 
-def branch(heuristic,start,goal,limit):
+def astar_Rank(heuristic,start,goal):
+    (perm,threes,rowNum,colNum) = r.toPerm(matrix)
+    length = len(perm)
+    countArray = r.counts(perm)
+    pot =  r.potential(perm,countArray)
+
+    is_visited = [False] * pot
+    is_visited[r.rank(perm,length,countArray,pot)] = True
+
     frontier = Queue.PriorityQueue()
-    frontier.put((heuristic(start,goal), [start]))
+    frontier.put((heuristic(start,goal), [r.rank(perm,length,countArray,pot)]))
+
     while frontier.qsize() > 0:
         path = frontier.get()
         last_vertex = path[1][-1]
-        if m.is_goal(last_vertex,goal):
-            branch(heuristic(last_vertex,goal),start,goal,len(path))
-            return path
-        for next_vertex in m.neighbors(last_vertex):
-            if len(path) == limit:
+        tempPerm = r.unrank(last_vertex,length,countArray,pot)
+        tempMatrix = r.toMatrix(tempPerm,threes,rowNum,colNum)
+        if m.is_goal(tempMatrix,goal):
+            matPath = []
+            for item in path[1]:
+                unperm = r.unrank(item,length,countArray,pot)
+                matPath.append(r.toMatrix(unperm,threes,rowNum,colNum))
+            return matPath
+        for next_vertex in m.neighbors(tempMatrix):
+            if m.is_stuck(tempMatrix,goal):
                 continue
-            if any((next_vertex == x) for x in path[1]): #If new vertex already in path, ignore this neighbor.
+            perm = r.toPerm(next_vertex)[0]
+            rankedMat= r.rank(perm,length,countArray,pot)
+            if is_visited[rankedMat] == True:
                 continue
-            if m.is_stuck(next_vertex,goal):
-                continue
-            new_path = (len(path[1])-1+heuristic(next_vertex,goal), path[1] + [next_vertex])
+            else:
+                is_visited[rankedMat] = True
+            new_path = (len(path[1])-1+heuristic(next_vertex,goal), path[1] + [rankedMat])
             frontier.put(new_path)
+
     return None
+
 
 
 if __name__ == "__main__":
@@ -69,24 +88,13 @@ if __name__ == "__main__":
     print goals
     print "\n"
 
-
-    #print m.boxes(matrix, goals)
-    #print m.manhattan(matrix, goals)
     start_time = time.time()
-    path = astar(m.manhattan,matrix,goals)
-    #matrixPath = []
-    print "astar"
-    for element in path[1]:
-        #matrixPath.append(element[1])
-        print np.array(element)
-    #    print "\n"
-    print path[0]
-    print("--- %s seconds ---" % (time.time() - start_time))
+    path = astar_Rank(m.manhattan,matrix,goals)
 
-    '''
-    for element in matrixPath:
-        print np.array(element)
+    print "astar"
+    for element in path:
+        print element
         print "\n"
 
-    print cost(matrixPath,m.boxes,goals)
-    '''
+
+    print("--- %s seconds ---" % (time.time() - start_time))
